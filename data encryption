@@ -1,0 +1,46 @@
+# secure_tool.py
+import os, hashlib, hmac, base64, secrets
+from typing import Tuple
+
+def generate_salt(length: int = 16) -> bytes:
+    return secrets.token_bytes(length)
+
+def hash_password(password: str, salt: bytes = None, iterations: int = 200_000) -> Tuple[bytes, bytes, int]:
+    if salt is None:
+        salt = generate_salt()
+    pwd = password.encode('utf-8')
+    dk = hashlib.pbkdf2_hmac('sha256', pwd, salt, iterations, dklen=32)
+    return salt, dk, iterations
+
+def verify_password(password: str, salt: bytes, derived_key: bytes, iterations: int) -> bool:
+    check = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations, dklen=len(derived_key))
+    return hmac.compare_digest(check, derived_key)
+
+def compute_hmac(message: bytes, key: bytes) -> bytes:
+    return hmac.new(key, message, hashlib.sha256).digest()
+
+# Example usage
+password = "S3cureP@ssw0rd!"
+salt, derived_key, iterations = hash_password(password)
+print("Salt (base64):", base64.b64encode(salt).decode())
+print("Derived key (base64):", base64.b64encode(derived_key).decode())
+print("Verify correct:", verify_password("S3cureP@ssw0rd!", salt, derived_key, iterations))
+
+# HMAC example
+message = b"Important message to store"
+hmac_key = secrets.token_bytes(32)
+tag = compute_hmac(message, hmac_key)
+print("HMAC (base64):", base64.b64encode(tag).decode())
+
+# Symmetric encryption (optional, requires cryptography)
+try:
+    from cryptography.fernet import Fernet
+    # Fernet needs a 32-byte urlsafe-base64-encoded key
+    fernet_key = base64.urlsafe_b64encode(derived_key)
+    f = Fernet(fernet_key)
+    token = f.encrypt(b"Super secret data to encrypt")
+    plaintext = f.decrypt(token)
+    print("Fernet token:", token)
+    print("Decrypted:", plaintext)
+except Exception:
+    print("cryptography not installed — run: pip install cryptography")
